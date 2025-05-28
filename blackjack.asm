@@ -20,6 +20,58 @@ ask_start_round:	.string		"\nDeseja Jogar? (1 - Sim, 0 - Não): "
 .text
 
 
+######################################################################################################################
+# CALCULATE THE VALUE OF A HAND
+# RECEIVE IN A3 WHICH PLAYER IS THE "TARGER"
+# A3 -> 1 DEALER
+# A3 -> 0 PLAYER
+# RETURN IN A6 THE VALUE OF HAND
+calc_points_hand:
+
+	addi sp, sp, -4 
+	sw ra, 0(sp) 
+	
+	add t0, zero, zero # temp to store value for the sum of cards
+	add t3, zero, zero # offset for loop
+	beq a3,zero, set_ad_player
+	j set_ad_dealer
+	
+loop_calc:
+
+	beq t3, t2 ret_calc	
+	lw t4, t3(t1) 
+	add t0, t0, t4
+	addi t3, t3, 4
+	j loop_calc
+
+ret_calc:
+	# MISSING MECANISM TO CONTROL HOW A'S WORKS
+	
+	add a6, zero, t6
+		
+		
+	lw ra, 0(sp)
+	addi sp, sp, 4
+ 
+	
+	ret
+
+set_ad_player:
+	
+	la t1, player_cards
+	lw t2, index_cards_player
+	slli t3, t2, 2 			# OFFSET TO CONTROL LOOP
+	
+	j loop_calc
+
+set_ad_dealer:
+
+	la t1, dealer_cards
+	lw t2, index_cards_dealer
+	slli t3, t2, 2			# OFFSET TO CONTROL LOOP	
+	
+	j loop_calc
+
 
 ######################################################################################################################
 # CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO DEALER
@@ -39,7 +91,7 @@ draw_card_dealer:
 	
 	lw ra, 0(sp)
 	addi sp, sp, 4
-
+ 
 
 	ret
 ######################################################################################################################
