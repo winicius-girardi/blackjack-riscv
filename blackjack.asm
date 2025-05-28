@@ -22,10 +22,73 @@ ask_start_round:	.string		"\nDeseja Jogar? (1 - Sim, 0 - Não): "
 
 
 ######################################################################################################################
+# CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO DEALER
+
+draw_card_dealer:
+
+	
+	addi sp, sp, -4 
+	sw ra, 0(sp) 
+	
+	
+	jal draw_card_from_pile
+	add a6, a2, zero
+	addi a3, zero, 1		# 
+	jal store_card_in_hand
+	
+	
+	lw ra, 0(sp)
+	addi sp, sp, 4
+
+
+	ret
+######################################################################################################################
+# CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO PLAYER
+
+draw_card_player:
+
+
+	addi sp, sp, -4 
+	sw ra, 0(sp) 
+	
+	jal draw_card_from_pile
+	add a6, a2, zero
+	addi a3, zero, 0		
+	jal store_card_in_hand
+	
+	lw ra, 0(sp)
+	addi sp, sp, 4
+
+	ret
+######################################################################################################################
+# ADDED A CARD TO A PLAYER HAND 
+# RECEIVE IN A3 WHICH PLAYER IN PLAYING
+# A3=1 -> DEALER
+# A3=0 -> PLAYER
+
+# RECEIVE A NUMBER OF A CARD TO ADDED TO THE VECTOR (PLAYER_CARDS OR DEALER_CARDS) IN A2
+
+store_card_in_hand:
+	
+	lw t1, 0(a1) 			# LOAD INDEX
+	slli t0, t1, 2 			# GET DISPLACEMENT
+	sw a2, a0(t0) 			# STORE CARD IN HAND 
+
+	
+	addi t1, t1, 1
+	sw t1, 0(a1)			# UPDATE INDEX
+	
+	ret
+
+
+
+
+######################################################################################################################
 
 #CREATE A RANDON INT BEETWEEN [1-13]
 #RETURN GENERATED NUMBER IN A6
 create_int_in_1_13:
+	
 	li a0, 1
 	li a1, 13
 	li a7, 42
@@ -39,7 +102,7 @@ create_int_in_1_13:
 	
 ######################################################################################################################
 	
-#RETURN A CARD FROM STACK IN REGISTER A6,
+#RETURN A VALID CARD FROM STACK IN REGISTER A6 (return a  number in range [1-13]),
 draw_card_from_pile:
 	
 	addi sp, sp, -4 
@@ -78,11 +141,12 @@ round_in_play:
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
 	
-	jal draw_card_from_pile:
-	slli t0, a6, 2 			# GET DISPLACEMENT
-
-
+	jal draw_card_player
+	jal draw_card_dealer
+	jal draw_card_player
+	jal draw_card_dealer
 	
+	### NOW DO THE HIT AND STAY MECANIC
 
 
 ######################################################################################################################
