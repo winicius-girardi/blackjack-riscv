@@ -22,20 +22,21 @@ ask_start_round:	.string		"\nDeseja Jogar? (1 - Sim, 0 - Não): "
 
 
 ######################################################################################################################
-
+#
+# ENTRYPOINT OF THE GAME
+#
 main:
+
 	jal start_game
 
-
-
-
-
 ######################################################################################################################
+#
 # CALCULATE THE VALUE OF A HAND
 # RECEIVE IN A3 WHICH PLAYER IS THE "TARGER"
 # A3 -> 1 DEALER
 # A3 -> 0 PLAYER
 # THEN SET THE  THE DEALER_POINT_R  / PLAYER_POINT_R
+#
 calc_points_hand:
 
 	addi sp, sp, -4 
@@ -132,8 +133,9 @@ set_ad_dealer:
 
 
 ######################################################################################################################
+#
 # CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO DEALER
-
+#
 draw_card_dealer:
 
 	
@@ -153,8 +155,9 @@ draw_card_dealer:
 
 	ret
 ######################################################################################################################
+#
 # CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO PLAYER
-
+#
 draw_card_player:
 
 
@@ -170,14 +173,16 @@ draw_card_player:
 	addi sp, sp, 4
 
 	ret
+	
 ######################################################################################################################
+#
 # ADDED A CARD TO A PLAYER HAND 
 # RECEIVE IN A3 WHICH PLAYER IN PLAYING
 # A3=1 -> DEALER
 # A3=0 -> PLAYER
-
+#
 # RECEIVE A NUMBER OF A CARD TO ADDED TO THE VECTOR (PLAYER_CARDS OR DEALER_CARDS) IN A2
-
+#
 store_card_in_hand:
 	
 	lw t1, 0(a1) 			# LOAD INDEX
@@ -190,13 +195,11 @@ store_card_in_hand:
 	
 	ret
 
-
-
-
 ######################################################################################################################
-
+#
 #CREATE A RANDON INT BEETWEEN [1-13]
 #RETURN GENERATED NUMBER IN A6
+#
 create_int_in_1_13:
 	
 	li a0, 1
@@ -208,11 +211,10 @@ create_int_in_1_13:
 	
 	ret
 
-	
-	
 ######################################################################################################################
-	
+#	
 #RETURN A VALID CARD FROM STACK IN REGISTER A6 (return a  number in range [1-13]),
+#
 draw_card_from_pile:
 	
 	addi sp, sp, -4 
@@ -238,6 +240,7 @@ loop_draw_card:
 	addi sp, sp, 4
 	
 	ret	
+	
 ######################################################################################################################
 #
 # IMPLEMENT HIT/STAY MECANIC FOR A PLAYER
@@ -245,7 +248,7 @@ loop_draw_card:
 # return a flag if the player pass 21 in a6
 # if a6 -> 0 no
 # if a6 -> 1 yes
-
+#
 hit_stay_player:
 	
 	addi sp, sp, -4 
@@ -280,12 +283,12 @@ set_over_limit_player:
 	j hit_stay_ret_2
 	
 ######################################################################################################################
-
+#
 # CONTROL ASPECT OF THE ROUND IN PLAY
 # DRAW CARDS FOR BOTH PLAYERS
 # CALL HIT/STAND MECANICS
 # WILL HANDLER WHICH WAS THE WINNER (DEALER/PLAYER)
-
+#
 round_in_play:
 
 	addi sp, sp, -4 
@@ -303,10 +306,10 @@ round_in_play:
 	
 
 	jal hit_stay_player 			# return a flag of player to check if was greater than 21
-	bne a6, zero, dealer_win 
+	bne a6, zero, dealer_win 		## TODO -> CHECK HOW THIS WILL WORK
 	 
-	jal hit_stay_dealer
-	bne a6, zero, player_win		# return a flag of dealer to check if was greater than 21
+	jal hit_stay_dealer			# return a flag of dealer to check if was greater than 21
+	bne a6, zero, player_win		## TODO -> CHECK HOW THIS WILL WORK
 	
 	jal check_winner			# check winner, print stats? att scores, restart round/want to play again
 
@@ -317,11 +320,12 @@ round_in_play:
 
 
 ######################################################################################################################
+#
 # CONTROL ROUNDS FOR THE GAME
 #  ASK THE PLAYER IF HE WANTS TO PLAY AGAIN
 # IF TRUE THEN START A NEW ROUND.
 # IF FALSE THEN WILL "START" THE FINISHING STEPS FOR THE GAME (DISPLAY FINAL STATS)
-
+#
 control_round_game:
 
 	addi sp, sp, -4 
@@ -353,9 +357,10 @@ start_round_ret:
 	ret
 
 ######################################################################################################################
-
-
-
+#
+# COUNT THE CARDS IN THE GAME IS IN THE PILE
+# IF LESS THE 40, RESET THE PILE
+#
 check_total_cards:
 	
 	la a0, total_cards
@@ -371,8 +376,9 @@ check_total_cards:
 	
 	
 ######################################################################################################################
-	
-	
+#	
+# INITIAL GREETING FOR THE GAME
+#	
 print_initial_greeting:
 	la t0, initial_greeting
 	li a7, 4
@@ -383,9 +389,9 @@ print_initial_greeting:
 	
 	
 ######################################################################################################################
-
-
-#GAME "CONTROLLER"
+#
+# GAME CONTROLLER TO CALL EACH MODULE FOR THE GAME
+#
 start_game:
 
 	jal print_initial_greeting
@@ -400,15 +406,19 @@ start_game:
 	
 
 ######################################################################################################################
-
-
+#
+# END PROGRAM EXECUTION
+#
 finish_game:
+
 	li a7,10
 	ecall
 
 ######################################################################################################################
-
-
+#
+# PRINT STATS FOR THE GAME IN THE CURRENT MATCH AFTER A ROUND? 
+# TODO -> CHECK HOW THIS WILL WORK
+#
 print_game_stats:
 	
 	la a0, total_cards
@@ -439,9 +449,8 @@ print_game_stats:
 	
 ######################################################################################################################
 # 
-
 # TODO -> TEST THAT
-
+#
 add_win_player:
 	
 	la t1, player_wins
@@ -452,8 +461,10 @@ add_win_player:
 	ret
 	
 ######################################################################################################################
-
-#REFACTOR THAT 
+#
+# REFACTOR THAT 
+# COUNT HOW  MANY CARDS IS IN A PILE
+#
 caculate_availaible_cards:
 	
 	la t0, cards_in_play
@@ -505,9 +516,10 @@ caculate_availaible_cards:
 	ret
 	
 ######################################################################################################################
-
-
-# index_cards_player player_cards index_cards_dealer dealer_cards
+#
+# RESET VARIABLES IN MEMORY USED TO CONTROL VALUES IN A ROUND
+# VARIABLES RESET: index_cards_player player_cards index_cards_dealer dealer_cards
+#
 reset_card_hands:
 
 	addi sp, sp, -4 
@@ -539,12 +551,13 @@ reset_card_hands:
 	ret 
 
 #######################################################################################################################	 
+#
 # FILL A VECTOR WITH A VALUE RECEIVE BY PARAMETER
 # RECEIVE IN 
 # A0 A ADDRESS OF VECTOR ( INITIAL )
 # A1 THE DISPLACEMENT (length)
 # A2 THE VALUE TO BE WRITTEN IN THE VECTOR
-
+#
 set_int_vector_by_value:
 
 	li t0, 0
@@ -557,8 +570,8 @@ loop_set_vector:
 	j loop_set_vector
 
 return_set_vector:
+
 	ret
-		
 
 ######################################################################################################################
 #  this code here wont be used
