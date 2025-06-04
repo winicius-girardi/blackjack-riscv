@@ -9,7 +9,8 @@ dealer_cards:		.word		0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 index_cards_dealer:	.word		0
 player_cards:		.word		0, 0, 0, 0, 0, 0, 0, 0, 0, 0  
 index_cards_player:	.word		0
-
+player_point_r:		.word 		0 						# STORE POINT OF HAND IN THE ROUND FOR PLAYER
+dealer_point_r:		.word		0						# STORE POINT OF HAND IN THE ROUND FOR DEALER
 
 initial_greeting:	.string		"Bem vindo ao Blackjack!\n"
 total_cards:		.string 	"\nTotal de cartas: "
@@ -21,46 +22,101 @@ ask_start_round:	.string		"\nDeseja Jogar? (1 - Sim, 0 - Não): "
 
 
 ######################################################################################################################
+
+main:
+	jal start_game
+
+
+
+
+
+######################################################################################################################
 # CALCULATE THE VALUE OF A HAND
 # RECEIVE IN A3 WHICH PLAYER IS THE "TARGER"
 # A3 -> 1 DEALER
 # A3 -> 0 PLAYER
-# RETURN IN A6 THE VALUE OF HAND
+# THEN SET THE  THE DEALER_POINT_R  / PLAYER_POINT_R
 calc_points_hand:
 
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
 	
-	add t0, zero, zero # temp to store value for the sum of cards
-	add t3, zero, zero # offset for loop
+	li t6, 1					# temp to control if there a a's in the hand -> if t6=0 there no a's else there a a's
+	add t0, zero, zero				# temp to store value for the sum of cards
+	add t3, zero, zero				# offset for loop
 	beq a3,zero, set_ad_player
 	j set_ad_dealer
 	
 loop_calc:
 
+	li t5, 10
 	beq t3, t2 ret_calc	
-	lw t4, t3(t1) 
-	add t0, t0, t4
+	lw  t4, t3(t1)  				# ADD HERE MECANISM TO CONTROL HOW A WORKS
+	beq t6, t4, a_handler				# CHECK IF T4 IS A A'S
+	beq t5, t4, g_than_ten_handler
+
+g_than_ten_handler:
+	li t4, 10
+	j sum_calc	
+
+sum_calc:
+
+	add  t0, t0, t4
 	addi t3, t3, 4
 	j loop_calc
 
+a_handler:
+
+	addi t4, t4, 10
+	li   t6, -1
+	j sum_calc
+
+
+rem_point_a:						# Remove 10 from a6
+	li  t5, -1
+	bne t6, t5, ret_calc_f				# if not equal mean that there no a's in hand  
+	li  t5, 10
+	sub a6, a6, t5
+ 	j   ret_calc_f
+
+	
+
 ret_calc:
-	# MISSING MECANISM TO CONTROL HOW A'S WORKS
 	
 	add a6, zero, t6
+	li t5, 21
+	bgt a6, t5, rem_point_a
 		
-		
+ret_calc_f:
+
+	li t5, 1
+	beq a3, t5, store_p_dealer
+	j store_p_player
+
+ret_calc_s:
+	
 	lw ra, 0(sp)
 	addi sp, sp, 4
  
 	
 	ret
 
+store_p_dealer:
+
+	sw a6, dealer_point_r
+	j ret_calc_s
+
+store_p_player:
+
+	sw a6, player_point_r
+	j ret_calc_s
+
+
 set_ad_player:
 	
 	la t1, player_cards
 	lw t2, index_cards_player
-	slli t3, t2, 2 			# OFFSET TO CONTROL LOOP
+	slli t3, t2, 2 					# OFFSET TO CONTROL LOOP
 	
 	j loop_calc
 
@@ -68,9 +124,11 @@ set_ad_dealer:
 
 	la t1, dealer_cards
 	lw t2, index_cards_dealer
-	slli t3, t2, 2			# OFFSET TO CONTROL LOOP	
+	slli t3, t2, 2					# OFFSET TO CONTROL LOOP	
 	
 	j loop_calc
+
+#a_checker
 
 
 ######################################################################################################################
@@ -144,8 +202,8 @@ create_int_in_1_13:
 	li a0, 1
 	li a1, 13
 	li a7, 42
-	
 	ecall
+	
 	add a6,zero,a0
 	
 	ret
@@ -158,38 +216,78 @@ create_int_in_1_13:
 draw_card_from_pile:
 	
 	addi sp, sp, -4 
-	sw ra, 0(sp) 
+	sw   ra, 0(sp) 
 	
-	la t1, availaible_cards
+	la   t1, availaible_cards
 	
 loop_draw_card:
 
-	jal create_int_in_1_13	  	#A6 HAS THE NUMBER
-	add t2, zero, a6
+	jal  create_int_in_1_13	  	#A6 HAS THE NUMBER
+	add  t2, zero, a6
 	slli a6,a6,2			#GET THE VALUE OF DISPLACEMENT BASED ON INDEX
 		
-	la t0, a6(t1)
-	beq t0, zero, loop_draw_card	#IF EQUAL MEANS THAT THE CARD GENERATED HAS NO QUANTITY IN THE PILE 
+	la   t0, a6(t1)
+	beq  t0, zero, loop_draw_card	#IF EQUAL MEANS THAT THE CARD GENERATED HAS NO QUANTITY IN THE PILE 
 	
-	sub t0,t0,1			#DECREASE THE AVAILABLE CARD FROM PILE
-	sw t0, a6(t1)
+	sub  t0,t0,1			#DECREASE THE AVAILABLE CARD FROM PILE
+	sw   t0, a6(t1)
 	
-	add a6, zero, t2		#SET A6 WITH RETURN VALUE (VALID CARD NUMBER LIKE 1,2,3, ETC)
+	add  a6, zero, t2		#SET A6 WITH RETURN VALUE (VALID CARD NUMBER LIKE 1,2,3, ETC)
 	
-	lw ra, 0(sp)
+	lw   ra, 0(sp)
 	addi sp, sp, 4
 	
 	ret	
+######################################################################################################################
+#
+# IMPLEMENT HIT/STAY MECANIC FOR A PLAYER
+#
+# return a flag if the player pass 21 in a6
+# if a6 -> 0 no
+# if a6 -> 1 yes
+
+hit_stay_player:
+	
+	addi sp, sp, -4 
+	sw   ra, 0 (sp) 
+	
+loop_hit_stay_player:
+	
+        la   a0, player_point_r
+	lw   t1, 0 (a0)
+	li   t2, 21
+	bge  t1, t2, hit_stay_ret_1
+	
 
 
+hit_stay_ret_1:
+	
+	bgt t1, t2, set_over_limit_player
+	li a6, 0
+
+
+hit_stay_ret_2:
+	
+	lw ra, 0(sp)
+	addi, sp, sp, 4
+	
+	ret
+
+
+set_over_limit_player:
+
+	li a6, 1
+	j hit_stay_ret_2
+	
 ######################################################################################################################
 
-
-
-##DRAW CARD TO PLAYER, DEALER, PLAYER, DEALER
-##SETUP THE MECANIC FOR HIT AND STAY
+# CONTROL ASPECT OF THE ROUND IN PLAY
+# DRAW CARDS FOR BOTH PLAYERS
+# CALL HIT/STAND MECANICS
+# WILL HANDLER WHICH WAS THE WINNER (DEALER/PLAYER)
 
 round_in_play:
+
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
 	
@@ -198,29 +296,57 @@ round_in_play:
 	jal draw_card_player
 	jal draw_card_dealer
 	
-	### NOW DO THE HIT AND STAY MECANIC
+	li  a3, 1
+	jal calc_points_hand
+	li  a3, 0
+	jal calc_points_hand
+	
+
+	jal hit_stay_player 			# return a flag of player to check if was greater than 21
+	bne a6, zero, dealer_win 
+	 
+	jal hit_stay_dealer
+	bne a6, zero, player_win		# return a flag of dealer to check if was greater than 21
+	
+	jal check_winner			# check winner, print stats? att scores, restart round/want to play again
+
+	lw ra, 0(sp)
+	addi, sp, sp, 4
+	
+	ret
 
 
 ######################################################################################################################
+# CONTROL ROUNDS FOR THE GAME
+#  ASK THE PLAYER IF HE WANTS TO PLAY AGAIN
+# IF TRUE THEN START A NEW ROUND.
+# IF FALSE THEN WILL "START" THE FINISHING STEPS FOR THE GAME (DISPLAY FINAL STATS)
 
-start_round:
+control_round_game:
 
-	# print asking the player if he wants to play a round or another round
-	la a0, ask_start_round
-	li a7, 4
-	ecall 
-	
-	li a7, 5
-	ecall 
-	beq zero, a0, finish_game
-	
-	# guarda endereco p/ retorno
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
+
+loop_round:
+
+	la a0, ask_start_round			# print asking the player if he wants to play a round or another round
+	li a7, 4
+	ecall 
+	li a7, 5
+	ecall
+	
+	  
+	beq zero, a0, start_round_ret		 
+	
 	
 	jal round_in_play
 	
-	# reescreve ra com endereco de retorno
+	j loop_round 			# check how this will work because we have to display stats after the round finishes
+				
+
+	
+start_round_ret:
+
 	lw ra, 0(sp)
 	addi, sp, sp, 4
 	
@@ -261,11 +387,17 @@ print_initial_greeting:
 
 #GAME "CONTROLLER"
 start_game:
+
 	jal print_initial_greeting
 	jal print_game_stats
-	jal start_round # start a new round or end the match.
+	jal control_round_game
+	#jal start_round # start a new round or end the match.
+			# print the winner of a rounds?	
 	
-
+	#jal print_game_stats_final # check this how will work
+	
+	j finish_game
+	
 
 ######################################################################################################################
 
@@ -306,16 +438,19 @@ print_game_stats:
 	ret
 	
 ######################################################################################################################
+# 
 
-
+# TODO -> TEST THAT
 
 add_win_player:
 	
-	la,t0, player_wins
-	li t1, 1
-	sw t1, 0(t0)
+	la t1, player_wins
+	lw,t0, 0(t1)
+	addi t0, t0, 1
+	sw t0, 0(t1)
 	
 	ret
+	
 ######################################################################################################################
 
 #REFACTOR THAT 
@@ -403,12 +538,13 @@ reset_card_hands:
 	
 	ret 
 
- ######################################################################################################################	 
-	
-#RECEIVE IN 
-#A0 A ADDRESS ( INITIAL )
-#A1 THE DISPLACEMENT
-#A2 THE VALUE TO BE WRITTEN
+#######################################################################################################################	 
+# FILL A VECTOR WITH A VALUE RECEIVE BY PARAMETER
+# RECEIVE IN 
+# A0 A ADDRESS OF VECTOR ( INITIAL )
+# A1 THE DISPLACEMENT (length)
+# A2 THE VALUE TO BE WRITTEN IN THE VECTOR
+
 set_int_vector_by_value:
 
 	li t0, 0
@@ -425,7 +561,7 @@ return_set_vector:
 		
 
 ######################################################################################################################
-
+#  this code here wont be used
 #CHANGE THAT TO USE SET_INT_VECTOR_BY_VALUE BECAUSE IN THE SAME THING
 #reset_cards_pile:
 	
