@@ -15,7 +15,7 @@ dealer_point_r:		.word		0						# STORE POINT OF HAND IN THE ROUND FOR DEALER
 initial_greeting:	.asciz		"Bem vindo ao Blackjack!\n"
 total_cards:		.asciz	 	"\nTotal de cartas: "
 dealer_points:		.asciz		"	Dealer: "
-player_points_msg:	.asciz		"	Jogador: "
+player_points_msg:	.asciz		"	\n	Jogador: "
 ask_start_round:	.asciz		"\nDeseja Jogar? (1 - Sim, 0 - Não): "
 player_draw_msg:	.asciz		"\nO jogador comprou a carta: "
 dealer_draw_msg:	.asciz		"\nO dealer comprou a carta: "
@@ -26,7 +26,10 @@ hit_stay_msg:		.asciz		"\nO que você deseja fazer? (1 - Hit, 2 - Stand): "
 colon_space: 		.asciz 		" : "
 dealer_hit_msg:  	.asciz 		"\nDealer compra uma carta.\n"
 dealer_stand_msg: 	.asciz 		"\nDealer decide ficar.\n"
-
+msg_player_wins:   	.asciz 		"\n>>> Jogador venceu o round!\n"
+msg_dealer_wins:   	.asciz 		"\n>>> Dealer venceu o round!\n"
+msg_draw:          	.asciz 		"\n>>> Empate no round!\n"
+wins_msg:		.asciz 		"\nVitorias:\n\n"
 
 .text
 
@@ -38,14 +41,17 @@ dealer_stand_msg: 	.asciz 		"\nDealer decide ficar.\n"
 main:
 
 	jal start_game
-
-
+	
 ######################################################################################################################
+#
+# SHOW THE DEALER HAND WHEN HE IS PLAYING (DRAWING CARDS)
+#
 show_dealer_hand_only:
+
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    la a0, dealer_points        # "	Dealer: "
+    la a0, dealer_points        
     li a7, 4
     ecall
 
@@ -54,6 +60,7 @@ show_dealer_hand_only:
     li t2, 0
 
 show_dealer_loop:
+
     bge t2, t1, show_dealer_total
 
     slli t3, t2, 2
@@ -72,13 +79,16 @@ show_dealer_loop:
     ecall
 
 skip_comma_d:
+
     j show_dealer_loop
 
 skip_zero_d:
+
     addi t2, t2, 1
     j show_dealer_loop
 
 show_dealer_total:
+
     la a0, colon_space
     li a7, 4
     ecall
@@ -103,18 +113,13 @@ show_dealer_total:
 #
 start_game:
 	
-	#jal reset_card_hands -> TODO MAKE A FUNCTION THAT CLEAR REGISTERS TRASH VALUES WHEN STARTING THE PROGRAM.
-	#jal clear_trash_f_memory
 	jal print_initial_greeting
-	jal print_game_stats
+
 	jal control_round_game
-	#jal start_round # start a new round or end the match.
-			# print the winner of a rounds?	
-	
-	#jal print_game_stats_final # check this how will work
-	
+
+	jal print_final_score
+
 	j finish_game
-	
 	
 ######################################################################################################################
 #
@@ -186,23 +191,19 @@ control_round_game:
 
 loop_round:
 
-	la a0, ask_start_round			# print asking the player if he wants to play a round or another round
+	la a0, ask_start_round			
 	li a7, 4
 	ecall 
 	
 	li a7, 5
 	ecall
-	
-	  
-	beq zero, a0, start_round_ret		 ## TODO -> ADD JUMP TO START A NEW ROUND
-	
+		  
+	beq zero, a0, start_round_ret		
 	
 	jal round_in_play
 	
-	j loop_round 			# check how this will work because we have to display stats after the round finishes
+	j loop_round 			
 				
-
-	
 start_round_ret:
 
 	lw ra, 0(sp)
@@ -220,91 +221,101 @@ start_round_ret:
 #
 calc_points_hand:
 
-    addi sp, sp, -4
+    addi sp, sp, -8
     sw ra, 0(sp)
+    sw s0, 4(sp)          # salva s0 porque vai usar
 
-    li t3, 0          # índice da carta
-    li t0, 0          # soma total das cartas
-    li t6, 0          # contador de ases (A)
+    li t3, 0              # índice da carta
+    li t0, 0              # soma total das cartas
+    li s0, 0              # contador de ases
 
     beq a3, zero, set_ad_player
     j set_ad_dealer
 
 loop_calc:
-    bge t3, t2, end_calc      # se índice >= número cartas, fim
 
-    slli t4, t3, 2           # deslocamento
-    add t5, t1, t4           # endereço da carta
-    lw t6, 0(t5)             # carrega valor da carta em t6
+    bge t3, t2, end_calc
+
+    slli t4, t3, 2
+    add t5, t1, t4
+    lw t6, 0(t5)          # carrega carta em t6
 
     li t4, 10
     blt t6, t4, not_face_card
-    li t6, 10                # cartas > 10 valem 10
+    li t6, 10             # cartas > 10 valem 10
 
 not_face_card:
-    li t4, 1
-    beq t6, t4, is_ace       # se carta == 1 (Ás)
 
-    add t0, t0, t6          # soma normal
+    li t4, 1
+    beq t6, t4, is_ace
+
+    add t0, t0, t6
     addi t3, t3, 1
     j loop_calc
 
 is_ace:
-    addi t0, t0, 11          # Ás vale 11 inicialmente
+
+    addi t0, t0, 11
     addi t3, t3, 1
-    addi t6, t6, 1           # contador de ases (use outro registrador livre, ex t6 se não usado)
+    addi s0, s0, 1        # incrementa contador de ases
     j loop_calc
 
 end_calc:
+
+
 adjust_aces:
+
     li t4, 21
-    ble t0, t4, store_points  # se soma <=21, armazena e sai
-    beqz t6, store_points     # se não tem ás, sai
-    addi t0, t0, -10         # diminui 10 para ajustar Ás
-    addi t6, t6, -1          # decrementa contador de ases
+    ble t0, t4, store_points
+    beqz s0, store_points
+    addi t0, t0, -10
+    addi s0, s0, -1
     j adjust_aces
 
 store_points:
+
     beq a3, zero, store_p_player
     j store_p_dealer
 
 store_p_player:
+
     la t1, player_point_r
     sw t0, 0(t1)
     j ret_calc_s
 
 store_p_dealer:
+
     la t1, dealer_point_r
     sw t0, 0(t1)
     j ret_calc_s
 
 ret_calc_s:
+
+    lw s0, 4(sp)         
     lw ra, 0(sp)
-    addi sp, sp, 4
+    addi sp, sp, 8
     ret
 
 set_ad_player:
+
     la t1, player_cards
     lw t2, index_cards_player
     j loop_calc
 
 set_ad_dealer:
+
     la t1, dealer_cards
     lw t2, index_cards_dealer
     j loop_calc
-
-
 
 ######################################################################################################################
 #
 # CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO DEALER
 #
 draw_card_dealer:
-
 	
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
-	
 	
 	jal draw_card_from_pile
 	add a2, a6, zero
@@ -317,18 +328,19 @@ draw_card_dealer:
  
 
 	ret
+	
 ######################################################################################################################
 #
 # CALL FUNCTION FOR ALL STEPS TO DRAW A CARD TO PLAYER
 #
 draw_card_player:
 
-
 	addi sp, sp, -4 
 	sw ra, 0(sp) 
 	
 	jal draw_card_from_pile
 	add a2, a6, zero
+
 	li  a3, 0		
 	jal store_card_in_hand
 	
@@ -336,6 +348,7 @@ draw_card_player:
 	addi sp, sp, 4
 
 	ret
+	
 ######################################################################################################################
 #
 # SHOW CARD THAT WAS DRAWN TO DE ALER/PLAYER
@@ -383,10 +396,10 @@ store_card_in_hand:
 	
 sc_hand_start:
 
-	lw t1, 0(a1) 			# LOAD INDEX
-	slli t0, t1, 2 			# GET DISPLACEMENT
+	lw t1, 0(a1) 			
+	slli t0, t1, 2 			
 	add s1, a0,t0
-	sw a2, 0(s1) 			# STORE CARD IN HAND 
+	sw a2, 0(s1) 			
 	j sc_ret
 
 sc_dealer:
@@ -404,12 +417,9 @@ sc_player:
 sc_ret:
 
 	addi t1, t1, 1
-	sw t1, 0(a1)			# UPDATE INDEX
+	sw t1, 0(a1)			
 	
 	ret
-	
-	
-
 
 ######################################################################################################################
 #
@@ -442,6 +452,7 @@ loop_draw_card:
 
 	jal  create_int_in_1_13	  	#A6 HAS THE NUMBER
 	add  t2, zero, a6
+	addi a6, a6, -1
 	slli a6, a6, 2			#GET THE VALUE OF DISPLACEMENT BASED ON INDEX
 		
 	add  s1, a6, t1
@@ -468,31 +479,40 @@ loop_draw_card:
 # if a6 -> 1 yes
 #
 hit_stay_player:
-    addi sp, sp, -4
+
+    addi sp, sp, -8
     sw ra, 0(sp)
+    sw t0, 4(sp)          
+
+    li t0, 0               
 
 loop_hit_stay_player:
+    beqz t0, skip_show_hand
+    jal show_player_hand_only
 
-    jal show_player_hand_only      # mostra só a mão do jogador
-    jal show_hit_stay              # pergunta: hit ou stay
+skip_show_hand:
 
+    li t0, 1               
+    sw t0, 4(sp)           
+
+    jal show_hit_stay
     li a7, 5
-    ecall                          # lê escolha do jogador em a0
+    ecall
 
-    li t0, 1
-    beq a0, t0, do_hit_player      # se == 1, faz HIT
+    li t1, 1
+    beq a0, t1, do_hit_player
 
-    # qualquer outro valor: STAY
     li a6, 0
     j hit_stay_player_exit
 
 do_hit_player:
+
     jal draw_card_player
     add a2, a6, zero
     li a3, 1
     jal display_card_draw
 
-    li  a3, 0
+    li a3, 0
     jal calc_points_hand
 
     la a0, player_point_r
@@ -503,21 +523,27 @@ do_hit_player:
     j loop_hit_stay_player
 
 player_busted:
+
     li a6, 1
 
 hit_stay_player_exit:
+
+    lw t0, 4(sp)
     lw ra, 0(sp)
-    addi sp, sp, 4
+    addi sp, sp, 8
     ret
 
-########################################################################################################
-# MOSTRA SOMENTE A MÃO DO PLAYER DURANTE HIT/STAY
+
+######################################################################################################################
+#
+# SHOW PLAYER HAND ON HIT/STAY
 #
 show_player_hand_only:
+
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    la a0, player_points_msg      # "	Jogador: "
+    la a0, player_points_msg     
     li a7, 4
     ecall
 
@@ -526,6 +552,7 @@ show_player_hand_only:
     li t2, 0
 
 show_hand_loop:
+
     bge t2, t1, show_hand_total
 
     slli t3, t2, 2
@@ -543,6 +570,7 @@ show_hand_loop:
     j show_hand_loop
 
 show_hand_total:
+
     la a0, colon_space
     li a7, 4
     ecall
@@ -562,40 +590,42 @@ show_hand_total:
 
 
 ######################################################################################################################
-########################################################################################################
-# MECÂNICA DE HIT/STAY DO DEALER
-# Dealer compra até empatar ou superar o player, sem ultrapassar 21.
-# A6 retorna:
-#   0 = dealer parou normalmente
-#   1 = dealer estourou (busted)
+# 
+# HIT/STAY FOR DEALER. HE WILL DRAW UNTIL HIS HANDS MATCH THE PLAYER HAND (DRAW OR GREATER) AND WHEN HIS POINTS ARE AT LEAST 17
 #
 hit_stay_dealer:
+    
     addi sp, sp, -4
     sw ra, 0(sp)
 
     la a0, player_point_r
-    lw t2, 0(a0)            # t2 = pontos do jogador
-
+    lw t2, 0(a0)            
+    
 loop_hit_dealer:
-
+    
     la a0, dealer_point_r
-    lw t1, 0(a0)            # pontos do dealer
+    lw t1, 0(a0)           
+
+    li t3, 17
+    bge t1, t3, check_against_player
+
+    j do_dealer_hit
+
+check_against_player:
 
     bge t1, t2, dealer_stop
 
-    jal draw_card_dealer
-    add a2, a6, zero
-    li a3, 0
-    jal display_card_draw
+do_dealer_hit:
 
-    jal show_dealer_hand_only       # mostra a mão do dealer atualizada
+    jal draw_card_dealer        
+    add a2, a6, zero            
+    li  a3, 0                   
+    jal display_card_draw       
 
-    la a0, dealer_hit_msg           # mensagem que dealer comprou carta
-    li a7, 4
-    ecall
-
-    li a3, 1
+    li  a3, 1                   
     jal calc_points_hand
+
+    jal show_dealer_hand_only
 
     la a0, dealer_point_r
     lw t1, 0(a0)
@@ -606,38 +636,52 @@ loop_hit_dealer:
     j loop_hit_dealer
 
 dealer_busted:
+
     li a6, 1
     j hit_stay_dealer_exit
 
 dealer_stop:
-    la a0, dealer_stand_msg         # mensagem que dealer parou
+
+    la a0, dealer_stand_msg        
     li a7, 4
     ecall
     li a6, 0
 
 hit_stay_dealer_exit:
+
     lw ra, 0(sp)
     addi sp, sp, 4
     ret
 
 ######################################################################################################################
-
+#
+# CHECK WINNER FOR CURRENT ROUND AND ADD THE POINT TO THE WINNER OF THE CURRENT ROUND
+#
 check_winner:
 
-	lw t1, dealer_point_r
-	lw t2, player_point_r
-	li t0, 21
-	bgt t1,t0, cw_player_win
-	bge t1,t2, cw_dealer_win
-	j cw_player_win
+    lw t1, dealer_point_r
+    lw t2, player_point_r
 
-cw_player_win:
+    li t0, 21
+    bgt t1, t0, player_win     
+    bgt t2, t0, dealer_win     
 
-	
+    bgt t1, t2, dealer_win     
+    blt t1, t2, player_win     
 
-cw_dealer_win:
+    j draw
+
+draw:
+
+    la a0, msg_draw
+    li a7, 4
+    ecall
+    j round_in_play_ret
+
+
 ######################################################################################################################
 #
+# SHOW MSG HIDDEN CARD FOR DEALER
 #
 show_msg_hidden_dealer:
 	
@@ -647,71 +691,69 @@ show_msg_hidden_dealer:
 	ret
 	
 ########################################################################################################
-# EXIBE MÃO DO PLAYER E DO DEALER COM FORMATAÇÃO CORRETA E VALOR FINAL
-# Exemplo:
+# 
+# SHOW PLAYER AND DEALER HAND AND THEN SHOW THE POINTS FOR LIKE THIS:
 # 	Jogador: 2, 5 : 7
 # 	Dealer: 10 e uma carta oculta.
 #
 show_both_hands:
+    
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    ##############################
-    # Cartas do Player:
-    la a0, player_points_msg      # já tem: "	Jogador: "
+    la a0, player_points_msg     
     li a7, 4
     ecall
 
     la t0, player_cards
     lw t1, index_cards_player
-    li t2, 0                      # contador
+    li t2, 0                     
 
 print_player_cards:
+    
     bge t2, t1, print_colon_total
 
     slli t3, t2, 2
     add t4, t0, t3
     lw a0, 0(t4)
-    beq a0, zero, skip_zero_p     # ignora 0 (não compradas)
-
+    beq a0, zero, skip_zero_p    
+    
     li a7, 1
     ecall
 
     addi t2, t2, 1
     bge t2, t1, skip_comma_p
 
-    # vírgula e espaço
+    
     la a0, comma_space
     li a7, 4
     ecall
 
 skip_comma_p:
+
     j print_player_cards
 
 skip_zero_p:
+
     addi t2, t2, 1
     j print_player_cards
 
 print_colon_total:
-    # imprime " : "
+   
     la a0, colon_space
     li a7, 4
     ecall
 
-    # carrega e imprime valor total da mão do player
     la a0, player_point_r
     lw a0, 0(a0)
     li a7, 1
     ecall
 
-    # nova linha
     la a0, newline
     li a7, 4
     ecall
 
-    ##############################
-    # Cartas do Dealer:
-    la a0, dealer_points          # já é "	Dealer: "
+    la a0, dealer_points      
     li a7, 4
     ecall
 
@@ -722,6 +764,7 @@ print_colon_total:
     ecall
 
 skip_dealer_card:
+
     la a0, dealer_hidden_msg
     li a7, 4
     ecall
@@ -733,7 +776,7 @@ skip_dealer_card:
 
 ######################################################################################################################
 #
-# EXIBE A MENSAGEM PARA O PLAYER ESCOLHER HIT OU STAY
+# SHOW HIT/STAY MSG
 #
 show_hit_stay:
 
@@ -748,7 +791,6 @@ show_hit_stay:
 	addi sp, sp, 4
 	ret
 
-
 ######################################################################################################################
 #
 # CONTROL ASPECT OF THE ROUND IN PLAY
@@ -761,9 +803,12 @@ round_in_play:
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    jal reset_round_memory   # Limpa arrays e índices antes de distribuir cartas
+    jal check_and_reset_deck  
+    jal calculate_available_cards  
+    
+    jal print_game_stats           
+    jal reset_round_memory
 
-    # Agora distribui cartas normalmente
     jal draw_card_player
     add a2, a6, zero
     li a3, 1
@@ -781,67 +826,59 @@ round_in_play:
 
     jal draw_card_dealer
 
-    # Exibe mãos com carta oculta do dealer
+    
+    li a3, 1
+    jal calc_points_hand
+    li a3, 0
+    jal calc_points_hand
+
     jal show_both_hands
 
-    # Calcula pontos
-    li a3, 1
-    jal calc_points_hand
-    li a3, 0
-    jal calc_points_hand
 
-    # Lógica Hit/Stay do jogador
-    jal hit_stay_player
-    bne a6, zero, dealer_win
+    jal hit_stay_player         
 
-    # Lógica Hit/Stay do dealer
-    jal hit_stay_dealer
-    bne a6, zero, player_win
+    bne a6, zero, dealer_win    
 
-    # Verifica vencedor
-    jal check_winner
+    jal show_dealer_hand_only   
+
+    jal hit_stay_dealer         
+
+    bne a6, zero, player_win    
+
+    jal check_winner            
 
 round_in_play_ret:
+
     lw ra, 0(sp)
     addi sp, sp, 4
     ret
 
-
 dealer_win:
-	
-	lw t1, dealer_wins
-	addi t1,t1,1
-	la t2, dealer_wins
-	sw t1, (t2)
-	j round_in_play_ret
-	
+
+    la a0, msg_dealer_wins
+    li a7, 4
+    ecall
+
+    lw t1, dealer_wins
+    addi t1, t1, 1
+    la t2, dealer_wins
+    sw t1, (t2)
+
+    j round_in_play_ret
+
 player_win:
 	
-	lw t1, player_wins
-	addi t1,t1,1
-	la t2, player_wins
-	sw t1, (t2)
-	j round_in_play_ret
-	
-######################################################################################################################
-#
-# COUNT THE CARDS IN THE GAME IS IN THE PILE
-# IF LESS THE 40, RESET THE PILE
-#
-check_total_cards:
-	
-	la a0, availaible_cards
-	li a1, 52
-	li a2, 4
-	
-	lw t1, 0(a0)
-	li t2, 40
-	
-	ble t1, t2, set_int_vector_by_value #write 4 in each index of vector  total_cards
-	
-	ret
-	
-	
+    la a0, msg_player_wins
+    li a7, 4
+    ecall
+
+    lw t1, player_wins
+    addi t1, t1, 1
+    la t2, player_wins
+    sw t1, 0(t2)
+
+    j round_in_play_ret
+
 ######################################################################################################################
 #	
 # INITIAL GREETING FOR THE GAME
@@ -864,105 +901,70 @@ finish_game:
 
 ######################################################################################################################
 #
-# PRINT STATS FOR THE GAME IN THE CURRENT MATCH AFTER A ROUND? 
-# TODO -> CHECK HOW THIS WILL WORK
+# PRINT STATS FOR THE GAME IN THE CURRENT MATCH AFTER/START OF A ROUND
+#
 #
 print_game_stats:
-	
-	la a0, total_cards
-	li a7, 4
-	ecall # exibe msg total de cartas
-	
-	lw a0, cards_in_play 
-	li a7, 1
-	ecall  # exibe cartas disponiveis
-	
-	la a0, dealer_points
-	li a7, 4
-	ecall #exibe msg dealer
-	
-	lw a0, dealer_wins
-	li a7, 1
-	ecall #exibe qtd vitorias dealer
-	
-	la a0, player_points_msg
-	li a7, 4
-	ecall #exibe msg player
-	
-	lw a0, player_wins
-	li a7, 1
-	ecall #exibe qtd wins player
-	
-	ret
-	
-######################################################################################################################
-# 
-# TODO -> TEST THAT
-#
-add_win_player:
-	
-	la t1, player_wins
-	lw t0, 0(t1)
-	addi t0, t0, 1
-	sw t0, 0(t1)
-	
-	ret
-	
-######################################################################################################################
-#
-# REFACTOR THAT 
-# COUNT HOW  MANY CARDS IS IN A PILE
-#
-caculate_availaible_cards:
-	
-	la t0, cards_in_play
-	li t1, 0 # temp cards count	
-	li t2, 0
-	
-	lw t2, 0(t0)
-	add t1, t1, t2
-	
-	lw t2, 4(t0)
-	add t1, t1, t2
-	
-	lw t2, 8(t0)
-	add t1, t1, t2
-	
-	lw t2, 12(t0)
-	add t1, t1, t2
-	
-	lw t2, 16(t0)
-	add t1, t1, t2
-	
-	lw t2, 20(t0)
-	add t1, t1, t2
-	
-	lw t2, 24(t0)
-	add t1, t1, t2
-	
-	lw t2, 28(t0)
-	add t1, t1, t2
-	
-	lw t2, 32(t0)
-	add t1, t1, t2
-	
-	lw t2, 36(t0)
-	add t1, t1, t2
-	
-	lw t2, 40(t0)
-	add t1, t1, t2
-	
-	lw t2, 44(t0)
-	add t1, t1, t2
-	
-	lw t2, 48(t0)
-	add t1, t1, t2
-	
-	la t0, cards_in_play
-	sw t1, 0(t0)
-	
-	ret
-	
+
+    addi sp, sp, -4
+    sw ra, 0(sp)
+    
+    jal calculate_available_cards
+
+    la a0, total_cards
+    li a7, 4
+    ecall
+
+    la t0, cards_in_play
+    lw a0, 0(t0)
+    li a7, 1
+    ecall
+
+
+    la a0, newline
+    li a7, 4
+    ecall
+
+    la a0, wins_msg
+    li a7, 4
+    ecall
+    
+
+    la a0, dealer_points
+    li a7, 4
+    ecall
+
+    la t0, dealer_wins
+    lw a0, 0(t0)
+    li a7, 1
+    ecall
+
+
+    la a0, newline
+    li a7, 4
+    ecall
+
+    la a0, player_points_msg
+    li a7, 4
+    ecall
+
+
+    la t0, player_wins
+    lw a0, 0(t0)
+    li a7, 1
+    ecall
+
+
+    la a0, newline
+    li a7, 4
+    ecall
+
+
+    lw ra, 0(sp) 
+    addi sp, sp, 4
+
+    ret
+
 ######################################################################################################################
 #
 # RESET VARIABLES IN MEMORY USED TO CONTROL VALUES IN A ROUND
@@ -1008,57 +1010,70 @@ reset_card_hands:
 #
 set_int_vector_by_value:
 
-	li t0, 0
-	
+    li t0, 0               
+    mv t3, a0             
+    
 loop_set_vector:
-	
-	bgt t0,a1, return_set_vector
-	add a0, t0,a0
-	sw a2,0(a0)
-	addi t0, t0, 4
-	j loop_set_vector
+
+    bge t0, a1, return_set_vector
+    add t1, t3, t0
+    sw a2, 0(t1)
+    addi t0, t0, 4
+    j loop_set_vector
 
 return_set_vector:
 
-	ret
+    ret
+
+
+
 #######################################################################################################################	 
 #
-# RESET MEMORY VALUES
+# RESET MEMORY VALUES THAT ARE USED IN A ROUND (NOT A MATCH)
 #
 reset_round_memory:
+
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    # Zera player_cards (10 ints = 40 bytes)
+
     la a0, player_cards
-    li a1, 40
+    li a1, 48
     li a2, 0
     jal memset_ints
 
-    # Zera dealer_cards (10 ints = 40 bytes)
     la a0, dealer_cards
-    li a1, 40
+    li a1, 48
     li a2, 0
     jal memset_ints
 
-    # Zera index_cards_player
     la t0, index_cards_player
     sw zero, 0(t0)
 
-    # Zera index_cards_dealer
     la t0, index_cards_dealer
     sw zero, 0(t0)
+
+
+    la t0, player_point_r
+    sw zero, 0(t0)
+    
+    la t0, dealer_point_r
+    sw zero, 0(t0)
+
 
     lw ra, 0(sp)
     addi sp, sp, 4
     ret
 
 memset_ints:
+
     addi sp, sp, -4
     sw ra, 0(sp)
 
-    li t0, 0               # offset
+    li t0, 0              
+    
 loop_memset:
+
     bge t0, a1, end_memset
     add t1, a0, t0
     sw a2, 0(t1)
@@ -1066,7 +1081,111 @@ loop_memset:
     j loop_memset
 
 end_memset:
+
     lw ra, 0(sp)
     addi sp, sp, 4
+    ret
+    
+#######################################################################################################################	 
+#
+# CALCULATE THE QUANTITY OF AVAILABLE_CARDS AND PUT THAT VALUE IN cards_in_play
+#
+calculate_available_cards:
+
+    la t0, availaible_cards   
+    li t1, 0                  
+    li t2, 0          
+
+loop_count_cards:
+
+    li t3, 13
+    bge t2, t3, save_total  
+
+    slli t4, t2, 2         
+    add t5, t0, t4            
+    lw t6, 0(t5)              
+    add t1, t1, t6            
+
+    addi t2, t2, 1            
+    j loop_count_cards
+
+save_total:
+
+    la t0, cards_in_play
+    sw t1, 0(t0)
+    ret
+
+#######################################################################################################################	 
+#
+# CHECK IF THE THAT HAS LESS THAN 40 CARDS, IF YES THEN RESET THE AVAILABLE_CARDS
+#
+check_and_reset_deck:
+
+    addi sp, sp, -4
+    sw ra, 0(sp)
+
+    jal calculate_available_cards
+   
+    la t0, cards_in_play
+    lw t1, 0(t0)
+
+    li t2, 40
+    bge t1, t2, no_reset_needed       
+
+    la a0, availaible_cards
+    li a1, 13              
+    slli a1, a1, 2         
+    li a2, 4              
+    jal set_int_vector_by_value
+
+no_reset_needed:
+
+    lw ra, 0(sp)
+    addi sp, sp, 4
+    ret
+
+#######################################################################################################################	 
+#
+# PRINT THE TOTAL OF WINS FOR  PLAYER AND DEALER
+#
+print_final_score:
+
+    la a0, newline
+    li a7, 4
+    ecall
+
+    la a0, wins_msg
+    li a7, 4
+    ecall
+
+    la a0, dealer_points
+    li a7, 4
+    ecall
+
+    lw a0, dealer_wins
+    li a7, 1
+    ecall
+
+    la a0, newline
+    li a7, 4
+    ecall
+
+    la a0, player_points_msg
+    li a7, 4
+    ecall
+
+    lw a0, player_wins
+    li a7, 1
+    ecall
+
+    la a0, newline
+    li a7, 4
+    ecall
+    
+    la a0, newline
+    li a7, 4
+    ecall
+
+
     ret
 
